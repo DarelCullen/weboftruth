@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+wikipedia-api
+pypdf
+python-docx
+python-multipart
