@@ -44,6 +44,5 @@ jobs:
     - name: Check imports
       run: |
         python -c "import fastapi"
-        python -c "import bs4"
         python -c "import wikipediaapi"
         python -c "import sqlalchemy"
