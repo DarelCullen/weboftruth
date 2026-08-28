@@ -1,40 +1,38 @@
 import React, { useState } from 'react';
 import { importWikipedia, uploadDocument, deleteGraph } from '../api';
-import { Search, FileText, Upload, PlusCircle, Trash2, ExternalLink } from 'lucide-react';
-
-
+import { Search, FileText, Upload, PlusCircle, Trash2, ExternalLink, MapPin, User, Building2, Calendar, FileCode, CheckCircle } from 'lucide-react';
 
 const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, onGraphClear, onNodeDelete, isFocusMode, onToggleFocus, activeTypes, onToggleType }) => {
-
-
     const [wikiQuery, setWikiQuery] = useState('');
-    const [importLimit, setImportLimit] = useState(100); // Default limit
+    const [importLimit, setImportLimit] = useState(100);
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
     const [error, setError] = useState(null);
-
-
-    // ... (rest of file) ...
-
-    // Near the bottom:
-
-
-
-
 
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         setLoading(true);
+        setLoadingMessage(`Reading ${file.name} and extracting entities (names, places, organizations)...`);
         setError(null);
+        setSuccessMessage("");
         try {
-            await uploadDocument(file);
+            const uploadedDoc = await uploadDocument(file);
             onGraphUpdate();
+            const count = uploadedDoc?.properties?.entities_found || 0;
+            setSuccessMessage(`Successfully processed "${file.name}"! Extracted ${count} entities onto the map.`);
+            if (uploadedDoc) {
+                onNodeSelect(uploadedDoc);
+            }
         } catch (err) {
-            setError('Failed to upload document');
+            setError('Failed to upload document and extract entities.');
             console.error(err);
         } finally {
             setLoading(false);
+            setLoadingMessage("");
+            // Reset the file input value so the same file can be re-uploaded if desired
+            e.target.value = "";
         }
     };
 
@@ -44,6 +42,7 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
         setLoading(true);
         setLoadingMessage(`Initializing import for '${title}' (Limit: ${importLimit})...`);
         setError(null);
+        setSuccessMessage("");
 
         try {
             const response = await fetch('http://localhost:8000/import/wikipedia', {
@@ -73,7 +72,6 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                             // Success
                         }
                     } catch (e) {
-                        // Ignore JSON parse errors for incomplete chunks, but rethrow critical errors
                         if (e.message && (e.message.startsWith("Server Error") || e.message === "Page not found")) {
                             throw e;
                         }
@@ -92,6 +90,19 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
         }
     };
 
+    const getNodeIcon = (type) => {
+        switch (type) {
+            case 'Person': return '👤';
+            case 'Location': return '📍';
+            case 'Organization': return '🏢';
+            case 'Document': return '📄';
+            case 'Event': return '📅';
+            case 'Technology': return '💻';
+            case 'Work': return '🎬';
+            default: return '🌐';
+        }
+    };
+
     return (
         <div className="flex flex-col gap-6 text-sm">
             <h2 className="text-xl font-bold border-b border-gray-700 pb-2">Web of Truth</h2>
@@ -103,8 +114,13 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                     <div className="bg-gray-700 p-3 rounded-md">
                         <div className="flex justify-between items-start mb-2">
                             <div>
-                                <h4 className="font-bold text-lg text-blue-300">{selectedNode.label}</h4>
-                                <div className="text-gray-300 text-xs">{selectedNode.type}</div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-base">{getNodeIcon(selectedNode.type)}</span>
+                                    <h4 className="font-bold text-lg text-blue-300 leading-tight">{selectedNode.label}</h4>
+                                </div>
+                                <div className="text-gray-300 text-xs mt-0.5 inline-block px-1.5 py-0.5 rounded bg-gray-800/80 border border-gray-600">
+                                    {selectedNode.type}
+                                </div>
                             </div>
                             <button
                                 onClick={() => fetchWikiData(selectedNode.label)}
@@ -116,14 +132,38 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                             </button>
                         </div>
 
+                        {/* Entity Breakdown for Document Nodes */}
+                        {selectedNode.type === 'Document' && selectedNode.properties?.entity_breakdown && (
+                            <div className="my-2 p-2 bg-gray-800/60 rounded border border-gray-600/50">
+                                <div className="text-xs font-semibold text-gray-300 mb-1">
+                                    Extracted Entities ({selectedNode.properties.entities_found || 0}):
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 text-xs">
+                                    {Object.entries(selectedNode.properties.entity_breakdown).map(([type, cnt]) => (
+                                        <span key={type} className="px-1.5 py-0.5 rounded bg-gray-700 text-gray-200 text-[11px]">
+                                            {getNodeIcon(type)} {cnt} {type}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Context Quote for Extracted Entities */}
+                        {selectedNode.properties?.context && (
+                            <div className="my-2 p-2 bg-gray-800/80 rounded border-l-2 border-blue-400 text-xs italic text-gray-300">
+                                "{selectedNode.properties.context}"
+                            </div>
+                        )}
+
                         {selectedNode.properties && (
                             <div className="mt-2 space-y-1">
                                 {Object.entries(selectedNode.properties).map(([key, value]) => {
-                                    const strValue = String(value);
+                                    if (key === 'entity_breakdown' || key === 'context') return null;
+                                    const strValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
                                     const isUrl = strValue.startsWith('http://') || strValue.startsWith('https://');
                                     return (
-                                        <div key={key} className="break-all">
-                                            <span className="text-gray-500">{key}:</span>{' '}
+                                        <div key={key} className="break-all text-xs">
+                                            <span className="text-gray-400 font-medium">{key}:</span>{' '}
                                             {isUrl ? (
                                                 <a
                                                     href={strValue}
@@ -139,7 +179,6 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                                         </div>
                                     );
                                 })}
-
                             </div>
                         )}
                     </div>
@@ -167,7 +206,7 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                 <div className="mt-4 pt-4 border-t border-gray-700">
                     <h4 className="text-gray-400 font-semibold mb-2 uppercase text-xs tracking-wider">Filter by Type</h4>
                     <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                        {['Person', 'Organization', 'Location', 'Event', 'Technology', 'Work', 'Document', 'WikipediaPage'].map(type => (
+                        {['Person', 'Location', 'Organization', 'Event', 'Technology', 'Work', 'Document', 'WikipediaPage'].map(type => (
                             <div key={type} className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -176,14 +215,14 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                                     onChange={() => onToggleType(type)}
                                     className="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800 h-3 w-3"
                                 />
-                                <label htmlFor={`filter-${type}`} className="text-gray-300 text-xs cursor-pointer select-none truncate">
-                                    {type}
+                                <label htmlFor={`filter-${type}`} className="text-gray-300 text-xs cursor-pointer select-none truncate flex items-center gap-1">
+                                    <span>{getNodeIcon(type)}</span>
+                                    <span>{type}</span>
                                 </label>
                             </div>
                         ))}
                     </div>
                 </div>
-
 
                 {/* Connected Nodes */}
                 {selectedNode && connectedNodes && connectedNodes.length > 0 && (
@@ -200,11 +239,12 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                                         {node.direction === 'out' ? '→' : '←'}
                                     </span>
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-blue-300 text-sm truncate group-hover:text-blue-200">
-                                            {node.label}
+                                        <div className="text-blue-300 text-sm truncate group-hover:text-blue-200 flex items-center gap-1">
+                                            <span>{getNodeIcon(node.type)}</span>
+                                            <span>{node.label}</span>
                                         </div>
                                         <div className="text-gray-500 text-[10px] truncate">
-                                            {node.type}
+                                            {node.type} {node.relation ? `• ${node.relation}` : ''}
                                         </div>
                                     </div>
                                 </div>
@@ -212,7 +252,6 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                         </div>
                     </div>
                 )}
-
 
                 {selectedNode && (
                     <div className="mt-3 pt-3 border-t border-gray-700">
@@ -230,7 +269,6 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                     </div>
                 )}
             </section>
-
 
             {/* Sourcing */}
             <section>
@@ -271,22 +309,27 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
 
                 {/* File Upload */}
                 <div>
-                    <label className="block text-xs mb-1">Upload Document (PDF/Text)</label>
+                    <label className="block text-xs mb-1 text-green-300 font-bold">Import Document (PDF / DOCX / Text)</label>
                     <div className="relative">
                         <input
                             type="file"
+                            accept=".pdf,.docx,.txt"
                             onChange={handleFileUpload}
                             className="hidden"
                             id="file-upload"
+                            disabled={loading}
                         />
                         <label
                             htmlFor="file-upload"
-                            className="flex items-center justify-center gap-2 w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 border-dashed rounded px-4 py-2 cursor-pointer transition-colors"
+                            className={`flex items-center justify-center gap-2 w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 border-dashed rounded px-4 py-2 cursor-pointer transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <Upload size={16} />
-                            <span>Choose File</span>
+                            <span>Upload PDF / Document</span>
                         </label>
                     </div>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                        Automatically reads pages, identifies names, places, and organizations, and maps connections.
+                    </p>
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-gray-700">
@@ -299,25 +342,27 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                         <Trash2 size={16} />
                         <span>Clear Database</span>
                     </button>
-
                 </div>
 
-
-                {error && <div className="text-red-400 mt-2">{error}</div>}
+                {error && <div className="text-red-400 mt-2 text-xs">{error}</div>}
+                {successMessage && (
+                    <div className="text-green-300 mt-2 text-xs flex items-start gap-1 bg-green-950/40 p-2 rounded border border-green-800/60">
+                        <CheckCircle size={14} className="flex-shrink-0 mt-0.5 text-green-400" />
+                        <span>{successMessage}</span>
+                    </div>
+                )}
                 {loading && (
-                    <div className="mt-2">
-                        <div className="text-blue-300 animate-pulse">Processing...</div>
+                    <div className="mt-2 p-2 bg-gray-800/80 rounded border border-blue-900/40">
+                        <div className="text-blue-300 font-semibold animate-pulse text-xs">Processing Document...</div>
                         <div className="text-gray-400 text-xs mt-1">{loadingMessage}</div>
                     </div>
                 )}
             </section>
 
-
-
             <div className="text-gray-600 text-xs mt-auto">
                 Backend: http://localhost:8000
             </div>
-        </div >
+        </div>
     );
 };
 
