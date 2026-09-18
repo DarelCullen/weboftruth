@@ -2,10 +2,24 @@ import React, { useRef, useEffect } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import SpriteText from 'three-spritetext';
 
-const GraphView = ({ graphData, onNodeClick }) => {
+const GraphView = ({ graphData, selectedNode, highlightedLinkId, onNodeClick, onLinkClick }) => {
     const fgRef = useRef();
     const containerRef = useRef();
     const [dimensions, setDimensions] = React.useState({ width: 800, height: 600 });
+
+    const getId = (node) => (typeof node === 'object' && node !== null ? node.id : node);
+
+    const isLinkHighlighted = (link) => {
+        if (!highlightedLinkId) return false;
+        return link.id === highlightedLinkId;
+    };
+
+    const isLinkConnectedToSelected = (link) => {
+        if (!selectedNode) return false;
+        const s = getId(link.source);
+        const t = getId(link.target);
+        return s === selectedNode.id || t === selectedNode.id;
+    };
 
     useEffect(() => {
         if (fgRef.current) {
@@ -14,6 +28,37 @@ const GraphView = ({ graphData, onNodeClick }) => {
             fgRef.current.d3Force('link').distance(70);
         }
     }, [graphData]);
+
+    // Smoothly focus on highlighted link when selected from sidebar
+    useEffect(() => {
+        if (!highlightedLinkId || !fgRef.current) return;
+        const link = graphData.links.find(l => l.id === highlightedLinkId);
+        if (!link || typeof link.source !== 'object' || typeof link.target !== 'object') return;
+
+        const midX = (link.source.x + link.target.x) / 2;
+        const midY = (link.source.y + link.target.y) / 2;
+        const midZ = (link.source.z + link.target.z) / 2;
+
+        const dx = link.target.x - link.source.x;
+        const dy = link.target.y - link.source.y;
+        const dz = link.target.z - link.source.z;
+        const span = Math.hypot(dx, dy, dz);
+        const distance = Math.max(span * 1.5, 60);
+
+        const currentPos = fgRef.current.cameraPosition();
+        const currentDist = Math.hypot(currentPos.x - midX, currentPos.y - midY, currentPos.z - midZ) || 1;
+        const ratio = distance / currentDist;
+
+        fgRef.current.cameraPosition(
+            {
+                x: midX + (currentPos.x - midX) * ratio,
+                y: midY + (currentPos.y - midY) * ratio,
+                z: midZ + (currentPos.z - midZ) * ratio
+            },
+            { x: midX, y: midY, z: midZ },
+            1800
+        );
+    }, [highlightedLinkId, graphData]);
 
     useEffect(() => {
         const resizeObserver = new ResizeObserver(entries => {
@@ -62,14 +107,26 @@ const GraphView = ({ graphData, onNodeClick }) => {
                     return sprite;
                 }}
 
-                linkDirectionalArrowLength={2}
+                linkDirectionalArrowLength={link => isLinkHighlighted(link) ? 5 : (isLinkConnectedToSelected(link) ? 3 : 2)}
                 linkDirectionalArrowRelPos={1}
-                linkWidth={0.5}
-                linkColor={() => '#9ca3af'} // Lighter gray (Tailwind gray-400)
+                linkWidth={link => isLinkHighlighted(link) ? 3.5 : (isLinkConnectedToSelected(link) ? 1.5 : 0.5)}
+                linkColor={link => {
+                    if (isLinkHighlighted(link)) return '#38bdf8'; // Bright cyan for highlighted link
+                    if (isLinkConnectedToSelected(link)) return '#818cf8'; // Soft indigo for connected links
+                    return '#4b5563'; // Dim gray for unrelated links
+                }}
+                linkDirectionalParticles={link => isLinkHighlighted(link) ? 6 : (isLinkConnectedToSelected(link) ? 2 : 0)}
+                linkDirectionalParticleWidth={link => isLinkHighlighted(link) ? 2.5 : 1.2}
+                linkDirectionalParticleSpeed={link => isLinkHighlighted(link) ? 0.012 : 0.005}
+                linkDirectionalParticleColor={link => isLinkHighlighted(link) ? '#38bdf8' : '#c7d2fe'}
+                linkLabel={link => {
+                    const exp = link.properties?.explanation || link.properties?.context || link.properties?.description;
+                    return exp ? `${link.relation || 'links_to'}: ${exp}` : (link.relation || '');
+                }}
 
-                // 3D Links (labels are trickier in 3D, skipping for now unless critical)
-                // If we want labels, we'd need to add sprites at link midpoints.
-                // For now, keeping it clean as per "thin lines" request.
+                onLinkClick={link => {
+                    if (onLinkClick) onLinkClick(link);
+                }}
 
                 onNodeClick={node => {
                     // 3D graph camera focus

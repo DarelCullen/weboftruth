@@ -287,7 +287,11 @@ def process_document(filename: str, file_content: bytes, db: Session) -> Node:
                 source_id=doc_node.id,
                 target_id=ent_node.id,
                 relation="mentions",
-                properties={"mention_count": count, "source_document": filename}
+                properties={
+                    "explanation": f"Document '{filename}' mentions {ent_name} ({count} time{'s' if count > 1 else ''}).",
+                    "mention_count": count,
+                    "source_document": filename
+                }
             )
             db.add(new_edge)
 
@@ -314,7 +318,11 @@ def process_document(filename: str, file_content: bytes, db: Session) -> Node:
                 source_id=n1.id,
                 target_id=n2.id,
                 relation="co_occurs_with",
-                properties={"context": context_snip, "source_document": filename}
+                properties={
+                    "explanation": context_snip,
+                    "context": context_snip,
+                    "source_document": filename
+                }
             )
             db.add(co_edge)
 

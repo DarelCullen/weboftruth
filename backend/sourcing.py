@@ -80,6 +80,43 @@ def get_or_create_node_from_page(page, db: Session) -> Node:
 
 
 import json
+import re
+
+def extract_relationship_explanation(page, target_title: str) -> str:
+    """
+    Extracts the most relevant context sentence from the Wikipedia page text
+    that explains the relationship between the main page and the target entity.
+    """
+    try:
+        text = (page.summary or "") + "\n\n" + (page.text or "")
+        if not text.strip():
+            return f"Referenced in Wikipedia article on '{page.title}'."
+
+        # Clean Wikipedia footnote citations e.g. [1], [2], [note 1]
+        cleaned_text = re.sub(r'\[\d+\]|\[note\s*\d+\]|\[citation needed\]', '', text, flags=re.IGNORECASE)
+
+        # Split into sentences using punctuation boundaries
+        raw_sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"\'])', cleaned_text)
+        sentences = [' '.join(s.split()) for s in raw_sentences if len(s.strip()) > 15]
+
+        target_lower = target_title.lower()
+
+        # 1. Look for full exact title match in sentence
+        for s in sentences:
+            if target_lower in s.lower():
+                return s[:350].strip()
+
+        # 2. Look for significant distinct words (e.g. surname for people or core noun)
+        words = [w for w in re.split(r'\W+', target_title) if len(w) > 3 and w.lower() not in {"from", "with", "that", "this", "they", "their", "into"}]
+        if words:
+            key_word = words[-1].lower()
+            for s in sentences:
+                if re.search(r'\b' + re.escape(key_word) + r'\b', s, re.IGNORECASE):
+                    return s[:350].strip()
+
+        return f"Referenced in Wikipedia article on '{page.title}'."
+    except Exception:
+        return f"Referenced in Wikipedia article on '{page.title}'."
 
 def fetch_wikipedia_data(title: str, db: Session, limit: int = 100):
     """
@@ -114,11 +151,12 @@ def fetch_wikipedia_data(title: str, db: Session, limit: int = 100):
             ).first()
             
             if not edge_exists:
+                explanation = extract_relationship_explanation(page, target_node.label)
                 new_edge = Edge(
                     source_id=main_node.id,
                     target_id=target_node.id,
                     relation="links_to",
-                    properties={}
+                    properties={"explanation": explanation}
                 )
                 db.add(new_edge)
         
@@ -177,11 +215,12 @@ def fetch_wikipedia_data(title: str, db: Session, limit: int = 100):
                 ).first()
                 
                 if not edge_exists:
+                    explanation = extract_relationship_explanation(page, link_node.label)
                     edge = Edge(
                         source_id=main_node.id,
                         target_id=link_node.id,
                         relation="links_to",
-                        properties={}
+                        properties={"explanation": explanation}
                     )
                     db.add(edge)
                     try:

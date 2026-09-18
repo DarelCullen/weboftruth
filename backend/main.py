@@ -22,8 +22,11 @@ app = FastAPI(title="Web of Truth API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Explicit origins
-
+    allow_origins=[
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+        "http://localhost:5175", "http://127.0.0.1:5175",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,9 +57,14 @@ class EdgeCreate(BaseModel):
     target_id: int
     relation: str
     properties: Dict[str, Any] = {}
+    explanation: Optional[str] = None
 
-class EdgeResponse(EdgeCreate):
+class EdgeResponse(BaseModel):
     id: int
+    source_id: int
+    target_id: int
+    relation: str
+    properties: Dict[str, Any] = {}
 
     class Config:
         from_attributes = True
@@ -120,7 +128,12 @@ def create_edge(edge: EdgeCreate, db: Session = Depends(get_db)):
     if not source or not target:
         raise HTTPException(status_code=404, detail="Source or Target node not found")
     
-    db_edge = Edge(**edge.dict())
+    edge_data = edge.dict()
+    explanation = edge_data.pop("explanation", None)
+    if explanation and "explanation" not in edge_data.get("properties", {}):
+        edge_data.setdefault("properties", {})["explanation"] = explanation
+
+    db_edge = Edge(**edge_data)
     db.add(db_edge)
     db.commit()
     db.refresh(db_edge)

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { importWikipedia, uploadDocument, deleteGraph } from '../api';
 import { Search, FileText, Upload, PlusCircle, Trash2, ExternalLink, MapPin, User, Building2, Calendar, FileCode, CheckCircle } from 'lucide-react';
 
-const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, onGraphClear, onNodeDelete, isFocusMode, onToggleFocus, activeTypes, onToggleType }) => {
+const SidePanel = ({ selectedNode, connectedNodes, highlightedLinkId, onConnectionClick, onNodeSelect, onGraphUpdate, onGraphClear, onNodeDelete, isFocusMode, onToggleFocus, activeTypes, onToggleType }) => {
     const [wikiQuery, setWikiQuery] = useState('');
     const [importLimit, setImportLimit] = useState(100);
     const [loading, setLoading] = useState(false);
@@ -228,27 +228,80 @@ const SidePanel = ({ selectedNode, connectedNodes, onNodeSelect, onGraphUpdate, 
                 {selectedNode && connectedNodes && connectedNodes.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-700">
                         <h4 className="text-gray-400 font-semibold mb-2 uppercase text-xs tracking-wider">Connections ({connectedNodes.length})</h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                            {connectedNodes.map((node, idx) => (
-                                <div
-                                    key={`${node.id}-${idx}`}
-                                    onClick={() => onNodeSelect(node)}
-                                    className="flex items-center gap-2 p-2 bg-gray-900/50 hover:bg-gray-700/80 rounded cursor-pointer transition-colors group"
-                                >
-                                    <span className="text-xs text-gray-500 w-4 text-center">
-                                        {node.direction === 'out' ? '→' : '←'}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-blue-300 text-sm truncate group-hover:text-blue-200 flex items-center gap-1">
-                                            <span>{getNodeIcon(node.type)}</span>
-                                            <span>{node.label}</span>
+                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                            {connectedNodes.map((node, idx) => {
+                                const isHighlighted = highlightedLinkId === node.linkId;
+                                return (
+                                    <div
+                                        key={`${node.id}-${idx}`}
+                                        onClick={() => onConnectionClick ? onConnectionClick(node) : onNodeSelect(node)}
+                                        className={`p-2.5 rounded cursor-pointer transition-all border ${
+                                            isHighlighted
+                                                ? 'bg-blue-950/80 border-blue-400 ring-2 ring-blue-500/40 shadow-lg shadow-blue-950/50'
+                                                : 'bg-gray-900/60 hover:bg-gray-700/70 border-gray-700/50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className={`text-xs font-bold ${isHighlighted ? 'text-blue-300' : 'text-blue-400'}`}>
+                                                    {node.direction === 'out' ? '→' : '←'}
+                                                </span>
+                                                <span className="text-sm">{getNodeIcon(node.type)}</span>
+                                                <span className="text-blue-300 text-sm font-semibold truncate group-hover:text-blue-200">
+                                                    {node.label}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {node.relation && (
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                                        isHighlighted
+                                                            ? 'bg-blue-600 text-white border-blue-400 font-medium'
+                                                            : 'bg-blue-950/70 text-blue-300 border border-blue-800/60'
+                                                    }`}>
+                                                        {node.relation}
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onNodeSelect(node);
+                                                    }}
+                                                    className="text-[11px] text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-600 transition-colors flex items-center gap-0.5"
+                                                    title="Switch selection to this entity"
+                                                >
+                                                    <span>View</span>
+                                                    <ExternalLink size={10} />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="text-gray-500 text-[10px] truncate">
-                                            {node.type} {node.relation ? `• ${node.relation}` : ''}
+
+                                        <div className="text-gray-400 text-[11px] mt-0.5 ml-5 flex items-center justify-between">
+                                            <span>{node.type}</span>
+                                            {isHighlighted && (
+                                                <span className="text-blue-400 text-[10px] font-medium">
+                                                    • Highlighted on map
+                                                </span>
+                                            )}
                                         </div>
+
+                                        {/* Relationship Explanation Field */}
+                                        {node.explanation && (
+                                            <div className={`mt-2 ml-1 text-xs p-2 rounded border-l-2 font-normal leading-relaxed ${
+                                                isHighlighted
+                                                    ? 'bg-blue-950/90 text-blue-100 border-blue-400'
+                                                    : 'bg-gray-950/60 text-gray-200 border-indigo-400'
+                                            }`}>
+                                                <span className={`text-[10px] uppercase font-bold block mb-0.5 tracking-wider ${
+                                                    isHighlighted ? 'text-blue-300' : 'text-indigo-300'
+                                                }`}>
+                                                    Relationship ({node.relation || 'links_to'}):
+                                                </span>
+                                                "{node.explanation}"
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}

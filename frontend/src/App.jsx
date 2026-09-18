@@ -9,6 +9,7 @@ import { PanelRightClose, PanelRightOpen, GripVertical } from 'lucide-react';
 function App() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [selectedNode, setSelectedNode] = useState(null);
+  const [highlightedLinkId, setHighlightedLinkId] = useState(null);
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
     title: '',
@@ -41,6 +42,11 @@ function App() {
 
   const handleNodeClick = (node) => {
     setSelectedNode(node);
+    setHighlightedLinkId(null);
+  };
+
+  const handleConnectionClick = (connectedNode) => {
+    setHighlightedLinkId(prev => (prev === connectedNode.linkId ? null : connectedNode.linkId));
   };
 
   // Sidebar resize logic
@@ -216,7 +222,13 @@ function App() {
     <div className="flex h-screen w-screen overflow-hidden bg-black text-white relative">
 
       <div className="flex-grow h-full relative min-w-0">
-        <GraphView graphData={displayedGraphData} onNodeClick={handleNodeClick} />
+        <GraphView
+          graphData={displayedGraphData}
+          selectedNode={selectedNode}
+          highlightedLinkId={highlightedLinkId}
+          onNodeClick={handleNodeClick}
+          onLinkClick={(link) => setHighlightedLinkId(prev => prev === link.id ? null : link.id)}
+        />
 
         {/* Toggle Button */}
         <button
@@ -245,6 +257,8 @@ function App() {
         >
           <SidePanel
             selectedNode={selectedNode}
+            highlightedLinkId={highlightedLinkId}
+            onConnectionClick={handleConnectionClick}
             connectedNodes={selectedNode ? graphData.links
               .filter(link => getId(link.source) === selectedNode.id || getId(link.target) === selectedNode.id)
               .map(link => {
@@ -257,7 +271,14 @@ function App() {
                   nodeObj = graphData.nodes.find(n => n.id === otherNode) || { id: otherNode, label: "Loading...", type: "Unknown" };
                 }
 
-                return { ...nodeObj, relation: link.relation, direction: isSource ? 'out' : 'in' };
+                return {
+                  ...nodeObj,
+                  relation: link.relation,
+                  direction: isSource ? 'out' : 'in',
+                  linkId: link.id,
+                  linkProperties: link.properties || {},
+                  explanation: link.properties?.explanation || link.properties?.context || link.properties?.description || ''
+                };
               })
               : []}
             onNodeSelect={handleNodeClick}
