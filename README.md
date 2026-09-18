@@ -2,9 +2,11 @@
 
 A graph visualization tool for exploring connections between entities, sourced from Wikipedia and documents.
 
+![Web of Truth Application Screenshot](screenshot.png)
+
 ## Project Structure
 
-- **frontend/**: React application (Vite + Tailwind CSS + react-force-graph-2d)
+- **frontend/**: React application (Vite + Tailwind CSS + react-force-graph-3d)
 - **backend/**: FastAPI application (SQLAlchemy + SQLite)
 
 ## Prerequisites

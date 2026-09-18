@@ -30,6 +30,19 @@ function App() {
         }))
       };
       setGraphData(formattedData);
+
+      setSelectedNode(prev => {
+        if (prev) return prev;
+        const featured = data.nodes.find(n => n.label === 'Alan Turing') ||
+                         data.nodes.find(n => n.label === 'Ada Lovelace') ||
+                         data.nodes.find(n => n.type === 'Person') ||
+                         data.nodes[0] || null;
+        if (featured) {
+          const firstLink = data.links.find(l => l.source_id === featured.id || l.target_id === featured.id);
+          if (firstLink) setHighlightedLinkId(firstLink.id);
+        }
+        return featured;
+      });
     } catch (error) {
       console.error("Failed to fetch graph data:", error);
     }
